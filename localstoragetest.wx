@@ -1,0 +1,98 @@
+Namespace localstoragetest
+
+#Import "<std>"
+#Import "<mojo>"
+#If __WEB_TARGET__
+#Import "<localstoragestream>"
+#Endif
+
+Using std..
+Using mojo..
+#If __WEB_TARGET__
+Using luc.localstoragestream
+#Endif
+
+Class MyWindow Extends Window
+	
+	Const NAMES:String[] = New String[]("Alice", "Bob", "Charlie", "Dorothy", "Edmund", "Faye")
+	
+	Field name:String
+	Field score:Int
+	
+	Method Load()
+		Local stream:Stream
+		#If __DESKTOP_TARGET__
+		stream = Stream.Open("savegame.dat", "r")
+		#Endif
+		#If __WEB_TARGET__
+		stream= Stream.Open("localstorage::savetest/savegame", "r")
+		#Endif
+		If(stream)
+			name = stream.ReadLine()
+			score = stream.ReadInt()
+			stream.Close()
+		End If 
+	End Method 
+	
+	Method Save()
+		Local stream:Stream
+		#If __DESKTOP_TARGET__
+		stream = Stream.Open("savegame.dat", "w")
+		#Endif
+		#If __WEB_TARGET__
+		stream= Stream.Open("localstorage::savetest/savegame", "w")
+		#Endif
+		If(stream)
+			stream.WriteLine(name)
+			stream.WriteInt(score)
+			stream.Close()
+		End If
+	End Method
+	
+	Method DeleteSave()
+		#If __DESKTOP_TARGET__
+		DeleteFile("savegame.dat")
+		#Endif
+		#If __WEB_TARGET__
+		LocalStorageStream.DeleteLocalStorageFile("savetest/savegame")
+		#Endif
+		StartNewGame()
+	End Method
+	
+	Method StartNewGame()
+		SeedRnd(Millisecs())
+		name = NAMES[Rnd(6)]
+		score = 0
+	End Method
+	
+	Method New()
+		Super.New("Local Storage Test", 640, 480)
+		Load()
+		If(name = "")
+			StartNewGame()
+		End If 
+	End Method
+	
+	Method OnRender(canvas:Canvas) Override
+		If(Keyboard.KeyHit(Key.Space))
+			score += 1
+		End If 
+		If(Keyboard.KeyHit(Key.S))
+			Save()
+		End If 
+		If(Keyboard.KeyHit(Key.R))
+			DeleteSave()
+		End If
+		canvas.Clear(Color.Black)
+		canvas.DrawText("Name: " + name, Width * 0.5, (Height - canvas.Font.Height) * 0.5, 0.5, 0.5)
+		canvas.DrawText("Score: " + score, Width * 0.5, (Height + canvas.Font.Height) * 0.5, 0.5, 0.5)
+		RequestRender()
+	End Method 
+	
+End Class 
+
+Function Main()
+	New AppInstance()
+	New MyWindow()
+	App.Run()
+End Function

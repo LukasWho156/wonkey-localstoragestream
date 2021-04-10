@@ -1,0 +1,7 @@
+{
+	"module":"luc.localstoragestream",
+	"about":"Local Storage Stream",
+	"author":"LukasWho",
+	"version":"1.0.0",
+	"depends":["libc", "std", "emscrpiten"]
+}

@@ -1,0 +1,198 @@
+Namespace luc.localstoragestream
+
+#Import "<std>"
+#Import "<emscripten>"
+
+Using std.stream
+Using libc
+Using emscripten
+
+#rem wonkeydoc Save and load data in your browser using the window.localStorage feature.
+#end
+Class LocalStorageStream Extends Stream
+	
+	Const LOCALSTORAGE_PATH_PREFIX:String = "wonkey::"
+	
+	Private
+	
+	Field fullPath:String
+	Field data:String
+	Field position:Int
+	
+	Field readable:Bool
+	Field writable:Bool
+	
+	'Convert hexadecimal representations of bytes into numeric values ...
+	Function HexToByte:UByte(hex:String)
+		#If __WEB_TARGET__
+		Return emscripten_run_script_int("parseInt(~q" + hex + "~q, 16);")
+		#Endif
+		Return 0
+	End Function
+	
+	'... and vice versa.
+	Function ByteToHex:String(b:UByte)
+		#If __WEB_TARGET__
+		Local hex:String = emscripten_run_script_string("var x = " + b + "; x.toString(16);")
+		If(hex.Length < 2)
+			hex = "0" + hex
+		End If 
+		Return hex
+		#Endif
+		Return "00"
+	End Function
+	
+	'Load the data from the localStorage into a string.
+	Method LoadData()
+		#If __WEB_TARGET__
+		data = emscripten_run_script_string("window.localStorage.getItem(~q" + fullPath + "~q);")
+		#Endif
+	End Method
+	
+	'Save the string data to the localStorage.
+	Method SaveData()
+		#If __WEB_TARGET__
+		emscripten_run_script("window.localStorage.setItem(~q" + fullPath + "~q, ~q" + data + "~q);")
+		#Endif
+	End Method
+	
+	'Read out a byte from the string at the current position and advance the position by 1 byte.
+	Method ReadByteFromString:UByte()
+		Local result:UByte = 0
+		If(Not Eof)
+			result = HexToByte(data.Mid(position, 2))
+			position += 2
+		End If 
+		Return result
+	End Method
+	
+	'Write a byte to the current position and advance the position by 1 byte. Note that this will overwrite
+	'existing data.
+	Method WriteByteToString(b:UByte)
+		data = data.Mid(0, position) + ByteToHex(b) + data.Slice(position + 2)
+		position += 2
+	End Method
+	
+	'Create a new LocalStorageStream object.
+	Method New(path:String, readable:Bool, writeable:Bool)
+		Self.fullPath = LOCALSTORAGE_PATH_PREFIX + path
+		Self.readable = readable
+		Self.writable = writeable
+		If(readable)
+			LoadData()
+		End If
+	End Method 
+	
+	Public
+	
+	#rem wonkeydoc True if no more data can be read from the stream.
+	#end
+	Property Eof:Bool() Override
+		Return position >= data.Length - 1
+	End Property 
+	
+	#rem wonkeydoc Length of the stream in bytes.
+	#end
+	Property Length:Int() Override
+		Return data.Length / 2
+	End Property 
+	
+	#rem wonkeydoc Current stream position in bytes.
+	#end
+	Property Position:Int() Override
+		Return position / 2
+	End Property
+	
+	#rem wonkeydoc Reads data from the local storage stream.
+	@param buf A pointer to the memory to read the data into.
+	@param count The number of bytes to read.
+	@return The number of bytes actually read.
+	#end
+	Method Read:Int(buf:Void Ptr, count:Int) Override
+		count = Clamp(count, 0, Length - Position)
+		Local result:UByte[] = New UByte[count]
+		For Local i:Int = 0 To count - 1
+			result[i] = ReadByteFromString()
+		Next
+		memcpy(buf, Varptr result[0], count)
+		Return count
+	End Method
+	
+	#rem wonkeydoc Writes data to the local storage stream.
+	Note that this data isn't saved until you close the stream.
+	@param buf A pointer to write the data from.
+	@param count The number of bytes to write.
+	@return The number of bytes actually written.
+	#end
+	Method Write:Int(buf:Void Ptr, count:Int) Override
+		Local bytes:UByte[] = New UByte[count]
+		memcpy(Varptr bytes[0], buf, count)
+		For Local b:UByte = Eachin bytes
+			WriteByteToString(b)
+		Next
+		Return count
+	End Method
+	
+	#rem wonkeydoc Seeks to a position in the filestream.
+	@param offset The position to seek to.
+	#end
+	Method Seek(offset:Int) Override
+		Self.position = Clamp(2 * offset, 0, data.Length)
+	End Method
+	
+	#rem wonkeydoc Save the data to the local storage.
+	Called when the stream is closed using the Close() method.
+	#end
+	Method OnClose() Override
+		SaveData()
+	End Method
+	
+	#rem wonkeydoc Open a new local storage stream.
+	@param path the name of the local storage key, automatically prefixed by 'wonkey::'.
+	@param mode 'r', 'w' or 'rw'.
+	@return Null if the mode is unspported or the mode is 'r' or 'rw' but no data could be found. A local storage stream object otherwise.
+	#end
+	Function Open:LocalStorageStream(path:String, mode:String)
+		Local readable:Bool
+		Local writeable:Bool
+		Select(mode)
+		Case "r"
+			readable = True
+		Case "w"
+			writeable = True
+		Case "rw"
+			readable = True
+			writeable = True
+		Default
+			Return Null
+		End Select 
+		Local stream:LocalStorageStream = New LocalStorageStream(path, readable, writeable)
+		If(readable And stream.Length = 0)
+			Return Null
+		End If 
+		Return stream
+	End Function
+	
+	#rem wonkeydoc Remove the specified item from local storage.
+	@param the name of the local stoarge item, automatically prefixed by "wonkey::"
+	#return True if succesful, False otherwise.
+	#end
+	Function DeleteLocalStorageFile:Bool(path:String)
+		Local fullPath:String = LOCALSTORAGE_PATH_PREFIX + path
+		#If __WEB_TARGET__
+		emscripten_run_script("window.localStorage.removeItem(~q" + fullPath + "~q);")
+		Return True
+		#Endif
+		'Right now the only way to reach this is to run this function without __WEB_TARGET__ enabled,
+		'which should usually not happen, but eh.
+		Return False
+	End Function
+	
+End Class 
+
+'Let the Stream class know that local storage streams exist now.
+Function Main()
+	Stream.OpenFuncs["localstorage"] = Lambda:Stream(proto:String, ipath:String, mode:String)
+		Return LocalStorageStream.Open(ipath, mode)
+	End
+End Function
