@@ -5,7 +5,7 @@ intended to write local save files for your browser games.
 
 INSTALLATION:
 -------------
-Copy the localstoragestream folder into the modules folder of your Wonkey installation. Build the module using `wake -mods -target=emscripten`
+Copy the localstoragestream folder into the modules folder of your Wonkey installation. Build the module using `wake -mods -target=emscripten localstoragestream`
 
 USAGE:
 ------
