@@ -1,5 +1,13 @@
 Namespace localstoragetest
 
+#Rem
+A simple test app to demonstrate loading/saving a savegame 'file' on either the desktop or emscripten target.
+If you start a new game, a random player name will be assigned to you.
+Press Space to score a point. Yay :)
+Press S to save your game.
+Press R to delete your savegame and start a new game.
+#End
+
 #Import "<std>"
 #Import "<mojo>"
 #If __WEB_TARGET__
